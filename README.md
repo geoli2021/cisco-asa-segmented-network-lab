@@ -1,6 +1,22 @@
 # 🛡️ Laboratório de Redes e Segurança de Perímetro com Cisco ASA 5506-X e Core L3
 
-Projetamento e implementação de uma infraestrutura corporativa segmentada por VLANs e Zonas de Segurança, utilizando **Switch L3 (Cisco 3560)** para roteamento inter-VLAN e **Firewall Cisco ASA 5506-X** para inspeção de estado (*Stateful Inspection*), ACLs de perímetro e regras de Identity NAT.
+Projetamento e implementação de uma infraestrutura corporativa segmentada por VLANs e Zonas de Segurança, utilizando **Switch L2 de Acesso**, **Switch L3 (Cisco 3560)** para roteamento inter-VLAN e **Firewall Cisco ASA 5506-X** para inspeção de estado (*Stateful Inspection*), ACLs de perímetro e regras de Identity NAT.
+
+---
+
+## 📌 Papel Sucinto dos Equipamentos na Rede
+
+* **SW-Acesso (Switch Layer 2 - Borda)**:
+  * **Função**: Conectividade de dispositivos finais e segmentação de acesso.
+  * **Papel**: Conecta os computadores dos usuários (*PC-Admin*), atribui as portas às respectivas **VLANs** (ex.: VLAN 10) e envia todo o tráfego multiplexado para o Core através de um link **Trunk (802.1Q)**.
+
+* **SW-Core-L3 (Switch Layer 3 - Backbone Interno)**:
+  * **Função**: Roteamento inter-VLAN de alta velocidade e agregação de tráfego.
+  * **Papel**: Processa o roteamento entre as sub-redes internas em velocidade de hardware (via SVIs) e encaminha o tráfego de saída para o firewall através de uma **porta roteada L3** dedicada (`no switchport` - `10.0.0.1/30`).
+
+* **ASA0 (Cisco ASA 5506-X - Segurança de Perímetro)**:
+  * **Função**: Firewall de estado (*Stateful Firewall*), isolamento de zonas e aplicação de políticas de segurança.
+  * **Papel**: Aplica níveis de segurança (*Security Levels*) entre as zonas **Inside** (100), **DMZ** (50) e **Outside** (0). Inspeciona as sessões de tráfego (ICMP/HTTP), aplica regras de **ACL** e efetua **Identity NAT** para proteger os servidores e a rede corporativa.
 
 ---
 
@@ -27,6 +43,34 @@ Projetamento e implementação de uma infraestrutura corporativa segmentada por 
 
 ---
 
+## 🏗️ Arquitetura e Decisão de Design (Modelo Hierárquico e Perímetro)
+
+Nesta topologia, optou-se pela separação clara entre **Switch de Acesso (SW-Acesso)**, **Switch Core Nível 3 (SW-Core-L3)** e **Firewall Cisco ASA 5506-X**, seguindo as melhores práticas do modelo de design hierárquico da Cisco.
+
+```text
+  [ Endpoints / VLANs ]
+            │ (L2 Access / Trunk)
+            ▼
+     [ SW-Acesso ]          --> Borda L2: Densidade de portas e marcação de VLANs
+            │ (Trunk 802.1Q)
+            ▼
+    [ SW-Core-L3 ]          --> Backbone L3: Roteamento Inter-VLAN em hardware
+            │ (Routed Link /30)
+            ▼
+ [ ASA 5506-X Firewall ]    --> Perímetro: Stateful Inspection, Zonas (DMZ/Inside) e NAT
+            │
+            ▼
+  [ DMZ / Web Server ]
+```
+
+### Por que não utilizar um cenário simplificado com apenas um Switch/Roteador?
+
+1. **Isolamento e Segurança Verdadeira**: Roteadores e switches tradicionais realizam apenas filtragem básica por pacotes (*Stateless*). O Cisco ASA garante inspeção profunda de estado (*Stateful Inspection*) e controle rigoroso de fluxo entre diferentes níveis de confiança.
+2. **Desempenho e Escalabilidade**: O Core L3 processa o roteamento interno de alta demanda em velocidade de hardware (*ASIC*), enquanto o ASA fica dedicado exclusivamente ao processamento de segurança, inspeção e aplicação de políticas de borda.
+3. **Prevenção de Ponto Único de Falha e Facilidade de Expansão**: Em ambientes corporativos reais, essa arquitetura modular permite adicionar novos switches de acesso por andar ou setor, novas sub-redes ou novas interfaces de DMZ no ASA sem impactar a estrutura existente.
+
+---
+
 ## 🎯 Objetivos do Laboratório
 
 1. **Segmentação Layer 2/Layer 3**: Criação e transporte de VLANs via links Trunking no switch de acesso até o Core L3.
@@ -39,10 +83,10 @@ Projetamento e implementação de uma infraestrutura corporativa segmentada por 
 
 ---
 
-## 🛠️ Principais Desafios Resolvidos Durante o Projecto
+## 🛠️ Principais Desafios Resolvidos Durante o Projeto
 
 * **Portas L2 vs L3 no Switch Core**: Resolução de falhas de roteamento ao converter interfaces de camada 2 em portas roteadas L3 puras com o comando `no switchport`.
-* **Tráfego de Retorno Bloqueado na DMZ**: Identificação de descartes de pacotes de retorno (DMZ → Inside) e correção via ACLs de entrada na interface `dmz` (`DMZ_IN`) e isenção de tradução NAT (`object network NET_INSIDE` / `nat (inside,dmz) static`).
+* **Tráfego de Retorno Bloqueado na DMZ**: Identificação de descartes de pacotes de retorno (DMZ → Inside) e correção via ACLs de entrada na interface `dmz` (`DMZ_IN`) e isenção de tradução NAT (`object network NET_INSIDE` com `nat (inside,dmz) static 192.168.10.0`).
 * **Stateful Inspection no ASA**: Ajuste na `global_policy` para garantir inspeção ativa do protocolo ICMP e sessões HTTP (porta 80).
 
 ---
